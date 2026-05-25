@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Migraine Weather Tracker</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap');
+
+        :root {
+            --bg: #0d0f1a;
+            --surface: #131627;
+            --surface2: #1a1e32;
+            --border: rgba(255,255,255,0.08);
+            --border-accent: rgba(99,179,237,0.3);
+            --text: #e2e8f0;
+            --text-muted: #64748b;
+            --text-dim: #94a3b8;
+            --blue: #63b3ed;
+            --blue-glow: rgba(99,179,237,0.15);
+            --purple: #b794f4;
+            --teal: #4fd1c5;
+            --red: #fc8181;
+            --amber: #f6ad55;
+            --green: #68d391;
+            --pain-0: #4fd1c5;
+            --pain-1: #68d391;
+            --pain-2: #f6ad55;
+            --pain-3: #fc8181;
+            --pain-4: #e53e3e;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg);
+            font-family: 'Syne', sans-serif;
+            min-height: 100vh;
+            color: var(--text);
+            padding: 16px;
+            padding-bottom: 40px;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: -200px; left: -200px;
+            width: 600px; height: 600px;
+            background: radial-gradient(circle, rgba(99,179,237,0.04) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container { max-width: 560px; margin: 0 auto; position: relative; z-index: 1; }
+
+        /* --- APP HEADER --- */
+        .app-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding: 4px 0;
+        }
+        .app-title {
+            font-size: 13px;
+            font-family: 'DM Mono', monospace;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+        .app-title span { color: var(--blue); }
+        .status-dot {
+            width: 8px; height: 8px;
+            background: var(--green);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--green);
+            animation: pulse 2s ease-in-out infinite;
+        }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+        /* --- CARD --- */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 14px;
+        }
+        .card-label {
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 14px;
+        }
+
+        /* --- PRESSURE CARD --- */
+        .pressure-card {
+            background: linear-gradient(135deg, #131a2e 0%, #0f1625 100%);
+            border-color: var(--border-accent);
+            position: relative;
+            overflow: hidden;
+        }
+        .pressure-card::after {
+            content: '';
+            position: absolute;
+            top: -60px; right: -60px;
+            width: 200px; height: 200px;
+            background: radial-gradient(circle, rgba(99,179,237,0.08) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .pressure-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .pressure-big {
+            font-family: 'DM Mono', monospace;
+            font-size: 72px;
+            font-weight: 300;
+            line-height: 1;
+            color: var(--blue);
+            letter-spacing: -2px;
+        }
+        .pressure-unit-inline {
+            font-size: 18px;
+            color: var(--text-muted);
+            font-weight: 300;
+        }
+        .refresh-btn {
+            background: rgba(99,179,237,0.1);
+            border: 1px solid var(--border-accent);
+            color: var(--blue);
+            padding: 8px 14px;
+            border-radius: 40px;
+            font-size: 12px;
+            font-family: 'DM Mono', monospace;
+            cursor: pointer;
+            width: auto;
+            margin: 0;
+            transition: background 0.2s;
+        }
+        .refresh-btn:active { background: rgba(99,179,237,0.2); transform: scale(0.97); }
+
+        .trend-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 12px 0 10px;
+        }
+        .trend-chip {
+            font-family: 'DM Mono', monospace;
+            font-size: 12px;
+            padding: 5px 12px;
+            border-radius: 40px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .trend-up { background: rgba(252,129,129,0.15); color: var(--red); border: 1px solid rgba(252,129,129,0.2); }
+        .trend-down { background: rgba(99,179,237,0.12); color: var(--blue); border: 1px solid rgba(99,179,237,0.2); }
+        .trend-stable { background: rgba(104,211,145,0.12); color: var(--green); border: 1px solid rgba(104,211,145,0.2); }
+
+        .warning-bar {
+            font-size: 12px;
+            padding: 10px 14px;
+            border-radius: 10px;
+            margin-top: 8px;
+            font-family: 'DM Mono', monospace;
+        }
+        .warn-high { background: rgba(252,129,129,0.1); border-left: 3px solid var(--red); color: #fca5a5; }
+        .warn-med { background: rgba(246,173,85,0.1); border-left: 3px solid var(--amber); color: #fed7aa; }
+        .warn-ok { background: rgba(104,211,145,0.1); border-left: 3px solid var(--green); color: #a7f3d0; }
+
+        /* --- LOCATION --- */
+        .location-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 12px;
+        }
+        .location-text {
+            font-size: 12px;
+            font-family: 'DM Mono', monospace;
+            color: var(--text-muted);
+        }
+        .location-text .loc-name { color: var(--text-dim); }
+        .gps-btn {
+            background: rgba(99,179,237,0.1);
+            border: 1px solid var(--border-accent);
+            color: var(--blue);
+            padding: 6px 12px;
+            border-radius: 40px;
+            font-size: 11px;
+            font-family: 'DM Mono', monospace;
+            cursor: pointer;
+            width: auto;
+            margin: 0;
+            transition: all 0.2s;
+        }
+        .gps-btn:active { transform: scale(0.96); }
+        .gps-btn.success { color: var(--green); border-color: rgba(104,211,145,0.3); background: rgba(104,211,145,0.08); }
+        .gps-btn.error { color: var(--red); border-color: rgba(252,129,129,0.3); background: rgba(252,129,129,0.08); }
+
+        /* --- HTTPS NOTICE --- */
+        .https-notice {
+            background: rgba(246,173,85,0.08);
+            border: 1px solid rgba(246,173,85,0.2);
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-size: 12px;
+            font-family: 'DM Mono', monospace;
+            color: #fed7aa;
+            line-height: 1.6;
+            margin-bottom: 14px;
+        }
+        .https-notice strong { color: var(--amber); }
+        .https-notice.hidden { display: none; }
+
+        /* --- CHART --- */
+        .chart-container {
+            position: relative;
+            height: 180px;
+            margin-top: 8px;
+        }
+        .chart-legend {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+        .legend-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        /* --- FORM --- */
+        .section-title {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .form-group { margin-bottom: 18px; }
+        .form-label {
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        /* Pain buttons */
+        .pain-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 6px;
+        }
+        .pain-btn {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 4px;
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.15s;
+            touch-action: manipulation;
+            line-height: 1.3;
+            width: 100%;
+        }
+        .pain-btn:active { transform: scale(0.95); }
+        .pain-btn.selected { color: #fff; border-color: transparent; }
+        .pain-0.selected { background: var(--pain-0); box-shadow: 0 0 12px rgba(79,209,197,0.3); }
+        .pain-1.selected { background: var(--pain-1); box-shadow: 0 0 12px rgba(104,211,145,0.3); }
+        .pain-2.selected { background: var(--pain-2); box-shadow: 0 0 12px rgba(246,173,85,0.3); }
+        .pain-3.selected { background: var(--pain-3); box-shadow: 0 0 12px rgba(252,129,129,0.3); }
+        .pain-4.selected { background: var(--pain-4); box-shadow: 0 0 12px rgba(229,62,62,0.4); }
+        .pain-btn .pain-num { font-size: 16px; font-weight: 500; display: block; }
+
+        /* Symptom pills */
+        .symptoms-wrap {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .symptom-pill {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 40px;
+            padding: 8px 14px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.15s;
+            touch-action: manipulation;
+            user-select: none;
+        }
+        .symptom-pill:active { transform: scale(0.95); }
+        .symptom-pill.selected {
+            background: rgba(183,148,244,0.15);
+            border-color: rgba(183,148,244,0.5);
+            color: var(--purple);
+        }
+
+        textarea, input[type="text"] {
+            width: 100%;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px 14px;
+            color: var(--text);
+            font-family: 'DM Mono', monospace;
+            font-size: 13px;
+            resize: vertical;
+            min-height: 72px;
+        }
+        textarea:focus, input[type="text"]:focus {
+            outline: none;
+            border-color: rgba(99,179,237,0.4);
+        }
+
+        /* Buttons */
+        .btn-primary {
+            background: linear-gradient(135deg, #3182ce, #2b6cb0);
+            color: white;
+            border: none;
+            padding: 14px;
+            border-radius: 12px;
+            font-family: 'Syne', sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            width: 100%;
+            cursor: pointer;
+            letter-spacing: 0.5px;
+            transition: opacity 0.2s, transform 0.1s;
+            margin-bottom: 0;
+        }
+        .btn-primary:active { transform: scale(0.98); opacity: 0.9; }
+
+        .btn-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .btn-sm {
+            padding: 10px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-family: 'DM Mono', monospace;
+            border: 1px solid var(--border);
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.15s;
+            margin: 0;
+        }
+        .btn-sm:active { transform: scale(0.97); }
+        .btn-export { background: rgba(104,211,145,0.1); color: var(--green); border-color: rgba(104,211,145,0.2); }
+        .btn-import { background: rgba(99,179,237,0.1); color: var(--blue); border-color: var(--border-accent); }
+        .btn-clip { background: rgba(183,148,244,0.1); color: var(--purple); border-color: rgba(183,148,244,0.2); }
+        .btn-danger { background: rgba(252,129,129,0.1); color: var(--red); border-color: rgba(252,129,129,0.2); }
+
+        .file-label {
+            display: block;
+            padding: 10px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-family: 'DM Mono', monospace;
+            background: rgba(99,179,237,0.1);
+            color: var(--blue);
+            border: 1px solid var(--border-accent);
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .file-label:active { transform: scale(0.97); }
+        input[type="file"] { display: none; }
+
+        /* --- HISTORY --- */
+        .history-list { max-height: 380px; overflow-y: auto; }
+        .history-item {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 14px;
+            margin-bottom: 8px;
+        }
+        .history-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .history-date {
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+        .pain-badge {
+            font-size: 11px;
+            font-family: 'DM Mono', monospace;
+            padding: 3px 10px;
+            border-radius: 40px;
+        }
+        .history-pressure {
+            font-family: 'DM Mono', monospace;
+            font-size: 12px;
+            color: var(--blue);
+            margin-bottom: 7px;
+        }
+        .history-symptoms {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-bottom: 7px;
+        }
+        .symp-badge {
+            background: rgba(183,148,244,0.12);
+            color: var(--purple);
+            font-size: 10px;
+            padding: 3px 8px;
+            border-radius: 20px;
+            font-family: 'DM Mono', monospace;
+        }
+        .history-note {
+            font-size: 12px;
+            color: var(--text-dim);
+            font-family: 'DM Mono', monospace;
+        }
+        .del-btn {
+            background: rgba(252,129,129,0.1);
+            border: 1px solid rgba(252,129,129,0.15);
+            color: var(--red);
+            padding: 5px 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-family: 'DM Mono', monospace;
+            cursor: pointer;
+            width: auto;
+            margin-top: 8px;
+        }
+        .empty-state {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 30px;
+            font-family: 'DM Mono', monospace;
+            font-size: 12px;
+        }
+        .stats-text {
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            text-align: center;
+            margin-top: 10px;
+        }
+        .count-badge {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-left: 8px;
+        }
+
+        /* --- TOAST --- */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e2742;
+            border: 1px solid var(--border-accent);
+            color: var(--text);
+            padding: 10px 20px;
+            border-radius: 40px;
+            font-family: 'DM Mono', monospace;
+            font-size: 12px;
+            z-index: 9999;
+            white-space: nowrap;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+            animation: toastIn 0.2s ease, toastOut 0.3s ease 2.2s forwards;
+        }
+        @keyframes toastIn { from{opacity:0;transform:translateX(-50%) translateY(10px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+        @keyframes toastOut { to{opacity:0;transform:translateX(-50%) translateY(6px)} }
+
+        .loading {
+            display: inline-block;
+            width: 18px; height: 18px;
+            border: 2px solid rgba(99,179,237,0.2);
+            border-radius: 50%;
+            border-top-color: var(--blue);
+            animation: spin 0.7s linear infinite;
+            vertical-align: middle;
+        }
+        @keyframes spin { to{transform:rotate(360deg)} }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- Header -->
+    <div class="app-header">
+        <div class="app-title"><span>//</span> MIGRAINE TRACKER</div>
+        <div class="status-dot" id="statusDot"></div>
+    </div>
+
+    <!-- HTTPS notice (shown only when not on https / localhost) -->
+    <div class="https-notice" id="httpsNotice">
+        <strong>⚠ GPS requires HTTPS</strong><br>
+        To use live GPS on your phone, open this file via a secure connection (e.g. save it to a simple local server or GitHub Pages). Opening it as a local <code>file://</code> URL blocks location access in most mobile browsers. Trinidad is used as the default in the meantime.
+    </div>
+
+    <!-- Pressure Card -->
+    <div class="card pressure-card">
+        <div class="pressure-header">
+            <div>
+                <div class="card-label">Barometric Pressure</div>
+                <div class="pressure-big" id="pressureValue"><div class="loading"></div></div>
+                <div id="trendDisplay"></div>
+            </div>
+            <button class="refresh-btn" onclick="fetchWeatherData()">⟳ Refresh</button>
+        </div>
+        <div id="warningDisplay"></div>
+        <div class="location-row">
+            <div class="location-text">📍 <span class="loc-name" id="locName">Trinidad</span></div>
+            <button class="gps-btn" id="gpsBtn" onclick="requestLocationPermission()">Enable GPS</button>
+        </div>
+    </div>
+
+    <!-- Pressure Chart -->
+    <div class="card">
+        <div class="card-label">Pressure &amp; Migraine History</div>
+        <div class="chart-container">
+            <canvas id="pressureChart"></canvas>
+        </div>
+        <div class="chart-legend">
+            <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div> Pressure (hPa)</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--pain-0)"></div> None</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--pain-1)"></div> Mild</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--pain-2)"></div> Moderate</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--pain-3)"></div> Severe</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--pain-4)"></div> Very Severe</div>
+        </div>
+    </div>
+
+    <!-- Log Entry -->
+    <div class="card">
+        <div class="section-title">📝 Log Entry</div>
+
+        <div class="form-group">
+            <label class="form-label">Pain Level</label>
+            <div class="pain-grid" id="painButtons">
+                <div class="pain-btn pain-0" data-pain="0" data-text="None"><span class="pain-num">0</span>None</div>
+                <div class="pain-btn pain-1" data-pain="1" data-text="Mild"><span class="pain-num">1</span>Mild</div>
+                <div class="pain-btn pain-2" data-pain="2" data-text="Moderate"><span class="pain-num">2</span>Mod</div>
+                <div class="pain-btn pain-3" data-pain="3" data-text="Severe"><span class="pain-num">3</span>Sev</div>
+                <div class="pain-btn pain-4" data-pain="4" data-text="Very Severe"><span class="pain-num">4</span>Max</div>
+            </div>
+            <input type="hidden" id="painLevel" value="0">
+            <input type="hidden" id="painText" value="None - No pain">
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Symptoms</label>
+            <div class="symptoms-wrap" id="symptomsContainer">
+                <div class="symptom-pill" data-symptom="Nausea">🤢 Nausea</div>
+                <div class="symptom-pill" data-symptom="Light Sensitive">☀️ Light</div>
+                <div class="symptom-pill" data-symptom="Sound Sensitive">🔊 Sound</div>
+                <div class="symptom-pill" data-symptom="Dizziness">🌀 Dizzy</div>
+                <div class="symptom-pill" data-symptom="Visual Disturbance">👁️ Visual</div>
+                <div class="symptom-pill" data-symptom="Tingling">⚡ Tingling</div>
+                <div class="symptom-pill" data-symptom="Fatigue">😴 Fatigue</div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Notes</label>
+            <textarea id="notes" placeholder="Triggers, medication, other notes..."></textarea>
+        </div>
+
+        <button class="btn-primary" onclick="saveMigraineLog()">💾 Save Entry</button>
+    </div>
+
+    <!-- Data Management -->
+    <div class="card">
+        <div class="section-title">💾 Data</div>
+        <div class="btn-row">
+            <button class="btn-sm btn-export" onclick="exportData()">📤 Export JSON</button>
+            <label class="file-label btn-sm">
+                📥 Import JSON
+                <input type="file" id="importFile" accept=".json" onchange="importData(this.files[0])">
+            </label>
+        </div>
+        <div class="btn-row">
+            <button class="btn-sm btn-clip" onclick="backupToCloud()">📋 Copy Backup</button>
+            <button class="btn-sm btn-danger" onclick="clearAllHistory()">🗑️ Clear All</button>
+        </div>
+        <div class="stats-text" id="storageStats">Loading...</div>
+    </div>
+
+    <!-- History -->
+    <div class="card">
+        <div class="section-title">📋 History <span class="count-badge" id="entryCount">0</span></div>
+        <div class="history-list" id="historyList">
+            <div class="empty-state">No entries yet.</div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // ── Constants & State ──────────────────────────────────────────────
+    const STORAGE_KEY = 'migraine_pressure_logs';
+    const PRESSURE_KEY = 'pressure_history';
+
+    let currentPressure = null;
+    let previousPressure = null;
+    let currentLocation = { lat: 10.6918, lon: -61.2225, name: 'Trinidad' };
+    let selectedSymptoms = new Set();
+    let pressureChart = null;
+
+    const PAIN_COLORS = {
+        0: '#4fd1c5', 1: '#68d391', 2: '#f6ad55', 3: '#fc8181', 4: '#e53e3e'
+    };
+
+    // ── HTTPS / Location Notice ────────────────────────────────────────
+    function checkHttps() {
+        const protocol = window.location.protocol;
+        const isSecure = protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const notice = document.getElementById('httpsNotice');
+        if (isSecure) {
+            notice.classList.add('hidden');
+        }
+        return isSecure;
+    }
+
+    // ── GPS Location ───────────────────────────────────────────────────
+    function requestLocationPermission() {
+        const btn = document.getElementById('gpsBtn');
+
+        if (!('geolocation' in navigator)) {
+            showToast('Geolocation not supported in this browser.');
+            return;
+        }
+
+        // Check we're on HTTPS first
+        if (!checkHttps()) {
+            showToast('⚠ GPS blocked: page must be served over HTTPS.');
+            btn.textContent = '⚠ HTTPS required';
+            btn.className = 'gps-btn error';
+            return;
+        }
+
+        btn.textContent = '⏳ Locating…';
+        btn.className = 'gps-btn';
+
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                currentLocation.lat = pos.coords.latitude;
+                currentLocation.lon = pos.coords.longitude;
+                reverseGeocode(currentLocation.lat, currentLocation.lon);
+                fetchWeatherData();
+                btn.textContent = '✓ GPS active';
+                btn.className = 'gps-btn success';
+            },
+            (err) => {
+                let msg;
+                switch (err.code) {
+                    case err.PERMISSION_DENIED:
+                        msg = 'GPS denied – check browser site settings.'; break;
+                    case err.POSITION_UNAVAILABLE:
+                        msg = 'Position unavailable.'; break;
+                    case err.TIMEOUT:
+                        msg = 'GPS timed out, try again.'; break;
+                    default:
+                        msg = 'GPS error. Using Trinidad.';
+                }
+                showToast(msg);
+                btn.textContent = '✗ Retry GPS';
+                btn.className = 'gps-btn error';
+            },
+            { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+        );
+    }
+
+    async function reverseGeocode(lat, lon) {
+        try {
+            const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`);
+            const d = await r.json();
+            const city = d.address?.city || d.address?.town || d.address?.village || d.address?.county || d.address?.state || 'Your Area';
+            currentLocation.name = city;
+            document.getElementById('locName').textContent = city;
+        } catch {
+            document.getElementById('locName').textContent = `${lat.toFixed(2)}, ${lon.toFixed(2)}`;
+        }
+    }
+
+    // ── Weather / Pressure ─────────────────────────────────────────────
+    async function fetchWeatherData() {
+        document.getElementById('pressureValue').innerHTML = '<div class="loading"></div>';
+        try {
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${currentLocation.lat}&longitude=${currentLocation.lon}&current=surface_pressure`;
+            const r = await fetch(url);
+            const d = await r.json();
+            if (d.current?.surface_pressure !== undefined) {
+                if (currentPressure !== null) previousPressure = currentPressure;
+                currentPressure = d.current.surface_pressure;
+                updatePressureDisplay(currentPressure);
+                storePressureReading(currentPressure);
+                checkAlert(currentPressure, previousPressure);
+                updateChart();
+            } else {
+                document.getElementById('pressureValue').textContent = '⚠ No data';
+            }
+        } catch {
+            document.getElementById('pressureValue').textContent = '⚠ Error';
+        }
+    }
+
+    function updatePressureDisplay(p) {
+        document.getElementById('pressureValue').innerHTML = `${Math.round(p)}<span style="font-size:18px;color:var(--text-muted);font-family:'DM Mono',monospace;"> hPa</span>`;
+
+        const td = document.getElementById('trendDisplay');
+        if (previousPressure !== null) {
+            const diff = p - previousPressure;
+            let cls, label;
+            if (diff > 0.5)       { cls = 'trend-up';     label = `↑ +${diff.toFixed(1)} hPa`; }
+            else if (diff < -0.5) { cls = 'trend-down';   label = `↓ ${diff.toFixed(1)} hPa`; }
+            else                   { cls = 'trend-stable'; label = `→ Stable`; }
+            td.innerHTML = `<div class="trend-row"><div class="trend-chip ${cls}">${label}</div></div>`;
+        } else {
+            td.innerHTML = `<div class="trend-row"><div class="trend-chip trend-stable">First reading</div></div>`;
+        }
+
+        const wd = document.getElementById('warningDisplay');
+        if (p < 1005)       wd.innerHTML = `<div class="warning-bar warn-high">⚠ Very low pressure — high migraine risk</div>`;
+        else if (p < 1010)  wd.innerHTML = `<div class="warning-bar warn-med">🔻 Low pressure — risk may be elevated</div>`;
+        else if (p > 1025)  wd.innerHTML = `<div class="warning-bar warn-med">⬆ High pressure — monitor symptoms</div>`;
+        else                wd.innerHTML = `<div class="warning-bar warn-ok">✓ Pressure in normal range</div>`;
+    }
+
+    function storePressureReading(p) {
+        const readings = JSON.parse(localStorage.getItem(PRESSURE_KEY) || '[]');
+        readings.push({ pressure: p, timestamp: Date.now() });
+        while (readings.length > 72) readings.shift();
+        localStorage.setItem(PRESSURE_KEY, JSON.stringify(readings));
+    }
+
+    function loadPressureHistory() {
+        const readings = JSON.parse(localStorage.getItem(PRESSURE_KEY) || '[]');
+        if (readings.length >= 2) {
+            const last = readings[readings.length - 1];
+            if (Date.now() - last.timestamp < 3600000) previousPressure = last.pressure;
+        }
+    }
+
+    function checkAlert(cur, prev) {
+        if (prev === null) return;
+        const drop = prev - cur;
+        if (drop > 3) showToast(`⚠ Pressure dropped ${drop.toFixed(1)} hPa — high migraine risk`);
+        else if (drop < -3) showToast(`↑ Pressure rose ${Math.abs(drop).toFixed(1)} hPa`);
+    }
+
+    // ── Chart ──────────────────────────────────────────────────────────
+    function buildChart() {
+        const ctx = document.getElementById('pressureChart').getContext('2d');
+        pressureChart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: [], datasets: [
+                {
+                    label: 'Pressure (hPa)',
+                    data: [],
+                    borderColor: 'rgba(99,179,237,0.8)',
+                    backgroundColor: 'rgba(99,179,237,0.06)',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    tension: 0.4,
+                    fill: true,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Migraine Events',
+                    data: [],
+                    borderColor: 'transparent',
+                    backgroundColor: [],
+                    pointRadius: [],
+                    pointStyle: 'circle',
+                    showLine: false,
+                    yAxisID: 'y'
+                }
+            ]},
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#1a1e32',
+                        borderColor: 'rgba(99,179,237,0.2)',
+                        borderWidth: 1,
+                        titleFont: { family: 'DM Mono, monospace', size: 10 },
+                        bodyFont: { family: 'DM Mono, monospace', size: 11 },
+                        titleColor: '#64748b',
+                        bodyColor: '#e2e8f0',
+                        callbacks: {
+                            label: function(ctx) {
+                                if (ctx.datasetIndex === 0) return ` ${ctx.parsed.y.toFixed(1)} hPa`;
+                                return ctx.parsed.y !== null ? ` Pain: ${ctx.parsed.y}` : null;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#475569', font: { family: 'DM Mono, monospace', size: 9 }, maxTicksLimit: 6 },
+                        grid: { color: 'rgba(255,255,255,0.04)' },
+                        border: { color: 'rgba(255,255,255,0.06)' }
+                    },
+                    y: {
+                        position: 'left',
+                        ticks: { color: '#475569', font: { family: 'DM Mono, monospace', size: 9 } },
+                        grid: { color: 'rgba(255,255,255,0.04)' },
+                        border: { color: 'rgba(255,255,255,0.06)' }
+                    }
+                }
+            }
+        });
+    }
+
+    function updateChart() {
+        if (!pressureChart) return;
+
+        const pressureHistory = JSON.parse(localStorage.getItem(PRESSURE_KEY) || '[]');
+        const logs = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+
+        // Build pressure line
+        const labels = pressureHistory.map(r => {
+            const d = new Date(r.timestamp);
+            return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
+        });
+        const pressureData = pressureHistory.map(r => r.pressure);
+
+        pressureChart.data.labels = labels;
+        pressureChart.data.datasets[0].data = pressureData;
+
+        // Overlay migraine events as colored dots on the pressure line
+        if (pressureHistory.length > 0) {
+            const migrainePoints = new Array(pressureHistory.length).fill(null);
+            const migraineColors = new Array(pressureHistory.length).fill('transparent');
+            const migraineRadii = new Array(pressureHistory.length).fill(0);
+
+            logs.forEach(log => {
+                // Find closest pressure reading to this log entry
+                let closest = 0, minDiff = Infinity;
+                pressureHistory.forEach((r, i) => {
+                    const diff = Math.abs(r.timestamp - log.timestamp);
+                    if (diff < minDiff) { minDiff = diff; closest = i; }
+                });
+                if (pressureHistory[closest]) {
+                    migrainePoints[closest] = pressureHistory[closest].pressure;
+                    migraineColors[closest] = PAIN_COLORS[log.painLevel] || PAIN_COLORS[0];
+                    migraineRadii[closest] = 7;
+                }
+            });
+
+            pressureChart.data.datasets[1].data = migrainePoints;
+            pressureChart.data.datasets[1].backgroundColor = migraineColors;
+            pressureChart.data.datasets[1].pointBackgroundColor = migraineColors;
+            pressureChart.data.datasets[1].pointRadius = migraineRadii;
+            pressureChart.data.datasets[1].pointBorderColor = migraineColors.map(c => c === 'transparent' ? 'transparent' : 'rgba(255,255,255,0.3)');
+            pressureChart.data.datasets[1].pointBorderWidth = 2;
+        }
+
+        pressureChart.update('none');
+    }
+
+    // ── Pain Buttons ───────────────────────────────────────────────────
+    function initPainButtons() {
+        document.querySelectorAll('.pain-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.pain-btn').forEach(b => b.classList.remove('selected'));
+                this.classList.add('selected');
+                document.getElementById('painLevel').value = this.dataset.pain;
+                const descs = { 0:'No pain', 1:'Aware, can ignore', 2:'Difficult to ignore', 3:'Hard to focus', 4:'Debilitating' };
+                document.getElementById('painText').value = `${this.dataset.text} - ${descs[this.dataset.pain]}`;
+            });
+        });
+        document.querySelector('.pain-btn[data-pain="0"]').classList.add('selected');
+    }
+
+    // ── Symptom Pills ──────────────────────────────────────────────────
+    function initSymptomPills() {
+        document.querySelectorAll('.symptom-pill').forEach(pill => {
+            pill.addEventListener('click', function(e) {
+                e.preventDefault();
+                const s = this.dataset.symptom;
+                if (selectedSymptoms.has(s)) { selectedSymptoms.delete(s); this.classList.remove('selected'); }
+                else { selectedSymptoms.add(s); this.classList.add('selected'); }
+            });
+        });
+    }
+
+    function clearSymptoms() {
+        selectedSymptoms.clear();
+        document.querySelectorAll('.symptom-pill').forEach(p => p.classList.remove('selected'));
+    }
+
+    // ── Save Log ───────────────────────────────────────────────────────
+    function saveMigraineLog() {
+        if (currentPressure === null) { showToast('Waiting for pressure data…'); return; }
+
+        const entry = {
+            id: Date.now(),
+            timestamp: Date.now(),
+            date: new Date().toLocaleString(),
+            pressure: currentPressure,
+            pressureTrend: previousPressure ? (currentPressure - previousPressure).toFixed(1) : null,
+            painLevel: parseInt(document.getElementById('painLevel').value),
+            painText: document.getElementById('painText').value,
+            symptoms: Array.from(selectedSymptoms),
+            notes: document.getElementById('notes').value,
+            location: currentLocation.name
+        };
+
+        const logs = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        logs.unshift(entry);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(logs));
+
+        clearSymptoms();
+        document.querySelector('.pain-btn[data-pain="0"]').click();
+        document.getElementById('notes').value = '';
+        showToast('✓ Entry saved');
+        loadHistory();
+        updateChart();
+        updateStorageStats();
+    }
+
+    // ── History ────────────────────────────────────────────────────────
+    function loadHistory() {
+        const logs = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        const el = document.getElementById('historyList');
+        document.getElementById('entryCount').textContent = `${logs.length}`;
+
+        if (!logs.length) {
+            el.innerHTML = '<div class="empty-state">No entries yet. Save your first log above.</div>';
+            return;
+        }
+
+        el.innerHTML = logs.map(log => {
+            const painColor = PAIN_COLORS[log.painLevel] || '#aaa';
+            const trend = log.pressureTrend
+                ? ` (${log.pressureTrend > 0 ? '↑' : '↓'}${Math.abs(log.pressureTrend)} hPa)`
+                : '';
+            return `<div class="history-item">
+                <div class="history-top">
+                    <div class="history-date">${log.date}</div>
+                    <div class="pain-badge" style="background:${painColor}22;color:${painColor};border:1px solid ${painColor}44">${log.painText.split(' - ')[0]}</div>
+                </div>
+                <div class="history-pressure">⊙ ${Math.round(log.pressure)} hPa${trend}</div>
+                ${log.symptoms?.length ? `<div class="history-symptoms">${log.symptoms.map(s=>`<span class="symp-badge">${s}</span>`).join('')}</div>` : ''}
+                ${log.notes ? `<div class="history-note">↳ ${log.notes.substring(0,100)}</div>` : ''}
+                <button class="del-btn" onclick="deleteLog(${log.id})">✕ Delete</button>
+            </div>`;
+        }).join('');
+    }
+
+    function deleteLog(id) {
+        let logs = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        logs = logs.filter(l => l.id !== id);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(logs));
+        loadHistory();
+        updateChart();
+        updateStorageStats();
+        showToast('Entry deleted');
+    }
+
+    // ── Data Management ────────────────────────────────────────────────
+    function exportData() {
+        const obj = {
+            exportDate: new Date().toISOString(),
+            appVersion: '2.0',
+            migraineLogs: JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'),
+            pressureHistory: JSON.parse(localStorage.getItem(PRESSURE_KEY) || '[]')
+        };
+        const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = Object.assign(document.createElement('a'), { href: url, download: `migraine_${new Date().toISOString().split('T')[0]}.json` });
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast(`Exported ${obj.migraineLogs.length} entries`);
+    }
+
+    function importData(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = e => {
+            try {
+                const d = JSON.parse(e.target.result);
+                if (!Array.isArray(d.migraineLogs)) throw new Error('Invalid format');
+                if (confirm(`Replace all data with ${d.migraineLogs.length} imported entries?`)) {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(d.migraineLogs));
+                    if (Array.isArray(d.pressureHistory)) localStorage.setItem(PRESSURE_KEY, JSON.stringify(d.pressureHistory));
+                    loadHistory(); updateChart(); updateStorageStats();
+                    showToast(`Imported ${d.migraineLogs.length} entries`);
+                    document.getElementById('importFile').value = '';
+                }
+            } catch { showToast('Import failed: invalid file'); }
+        };
+        reader.readAsText(file);
+    }
+
+    function backupToCloud() {
+        const obj = { backupDate: new Date().toISOString(), migraineLogs: JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]'), pressureHistory: JSON.parse(localStorage.getItem(PRESSURE_KEY)||'[]') };
+        navigator.clipboard.writeText(JSON.stringify(obj, null, 2))
+            .then(() => showToast('Backup copied to clipboard'))
+            .catch(() => showToast('Copy failed — use Export instead'));
+    }
+
+    function clearAllHistory() {
+        if (confirm('⚠ Delete ALL logs and pressure history? This cannot be undone.\n\nExport a backup first if needed.')) {
+            localStorage.setItem(STORAGE_KEY, '[]');
+            localStorage.setItem(PRESSURE_KEY, '[]');
+            loadHistory(); updateChart(); updateStorageStats();
+            showToast('All history cleared');
+        }
+    }
+
+    function updateStorageStats() {
+        const logs = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        const pressures = JSON.parse(localStorage.getItem(PRESSURE_KEY) || '[]');
+        const bytes = JSON.stringify(logs).length + JSON.stringify(pressures).length;
+        const size = bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes/1024).toFixed(1)} KB` : `${(bytes/1048576).toFixed(1)} MB`;
+        document.getElementById('storageStats').textContent = `${logs.length} entries · ${size} · device storage only`;
+    }
+
+    // ── Toast ──────────────────────────────────────────────────────────
+    function showToast(msg) {
+        document.querySelector('.toast')?.remove();
+        const t = Object.assign(document.createElement('div'), { className: 'toast', textContent: msg });
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 2600);
+    }
+
+    // ── Init ───────────────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', () => {
+        checkHttps();
+        initPainButtons();
+        initSymptomPills();
+        loadHistory();
+        loadPressureHistory();
+        buildChart();
+        updateChart();
+        fetchWeatherData();
+        updateStorageStats();
+
+        // Auto-request location only on HTTPS
+        if (window.location.protocol === 'https:' || window.location.hostname === 'localhost') {
+            setTimeout(() => {
+                if ('geolocation' in navigator) {
+                    navigator.geolocation.getCurrentPosition(
+                        pos => {
+                            currentLocation.lat = pos.coords.latitude;
+                            currentLocation.lon = pos.coords.longitude;
+                            reverseGeocode(currentLocation.lat, currentLocation.lon);
+                            fetchWeatherData();
+                            document.getElementById('gpsBtn').textContent = '✓ GPS active';
+                            document.getElementById('gpsBtn').className = 'gps-btn success';
+                        },
+                        () => {} // Silent fail, user can tap button
+                    );
+                }
+            }, 800);
+        }
+    });
+
+    // Auto-refresh every 10 minutes
+    setInterval(() => { if (currentLocation.lat) fetchWeatherData(); }, 600000);
+</script>
+</body>
+</html>
